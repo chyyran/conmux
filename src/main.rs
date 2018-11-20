@@ -4,6 +4,7 @@ extern crate lazy_static;
 extern crate widestring;
 extern crate winapi;
 extern crate dunce;
+extern crate terminal_size;
 
 use std::io::{stdout, Read, Write};
 use std::sync::mpsc::sync_channel;
@@ -13,16 +14,18 @@ use std::path::PathBuf;
 
 mod conpty;
 mod pipes;
+mod surface;
 
 use self::conpty::*;
-
+use self::surface::Surface;
 #[allow(dead_code)]
 #[allow(unused)]
 fn main() {
 
-    let mut pty = ConPty::new((120, 30), "pwsh", Some(&PathBuf::from("C:\\"))).unwrap();
-    pty.start_shell().unwrap();
+    let term = Surface::new();
 
+    let mut pty = ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
+    pty.start_shell().unwrap();
 
     pty.pipes.1.write(b"ping localhost");
     pty.pipes.1.write(b"\r");

@@ -20,21 +20,7 @@ use dunce::canonicalize;
 use widestring::U16CString;
 
 use crate::pipes::*;
-
-#[derive(Clone)]
-pub struct Coord {
-    x: i16,
-    y: i16,
-}
-
-impl From<(i16, i16)> for Coord {
-    fn from(tuple: (i16, i16)) -> Coord {
-        Coord {
-            x: tuple.0,
-            y: tuple.1,
-        }
-    }
-}
+use crate::surface::Coord;
 
 impl Into<COORD> for Coord {
     fn into(self) -> COORD {
@@ -51,7 +37,7 @@ unsafe impl Sync for PtyHandle {}
 
 pub struct ConPty {
     pty_handle: PtyHandle,
-    pub size: Coord,
+    size: Coord,
     shell: String,
     pwd: Option<PathBuf>,
     pub pipes: (SyncPipeIn, SyncPipeOut),
@@ -192,6 +178,19 @@ impl ConPty {
             Err(Error::last_os_error())
         } else {
             Ok(pty_handle)
+        }
+    }
+
+    fn resize_pseudo_console(&mut self, coord: impl Into<Coord>) -> Result<()> {
+        let coord = coord.into();
+        let result = unsafe {
+            consoleapi::ResizePseudoConsole(self.pty_handle.0, coord.clone().into())
+        };
+        if result != S_OK {
+            Err(Error::last_os_error())
+        } else {
+            self.size = coord;
+            Ok(())
         }
     }
 }
