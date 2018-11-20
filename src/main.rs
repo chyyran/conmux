@@ -1,7 +1,6 @@
 extern crate bytes;
 extern crate crossbeam;
 extern crate lazy_static;
-extern crate mio;
 extern crate widestring;
 extern crate winapi;
 extern crate dunce;
