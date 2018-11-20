@@ -30,7 +30,7 @@ impl Surface {
     pub fn new() -> Surface {
         let size = terminal_size();
         if let Some((Width(w), Height(h))) = size {
-            Surface { dimensions: Coord { x: w as i16, y: h as i16} }
+            Surface { dimensions: Coord { x: w as i16 , y: h as i16 } }
         } else {
             Surface { dimensions: Coord { x: 0, y: 0} }
         }

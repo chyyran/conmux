@@ -1,56 +1,76 @@
 extern crate bytes;
 extern crate crossbeam;
+extern crate dunce;
 extern crate lazy_static;
+extern crate terminal_size;
 extern crate widestring;
 extern crate winapi;
-extern crate dunce;
-extern crate terminal_size;
 
-use std::io::{stdout, Read, Write};
-use std::sync::mpsc::sync_channel;
-use std::thread;
+use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
-
+use std::sync::mpsc::channel;
+use std::thread;
 
 mod conpty;
 mod pipes;
 mod surface;
+mod wincon;
 
 use self::conpty::*;
 use self::surface::Surface;
+use self::wincon::*;
+
 #[allow(dead_code)]
 #[allow(unused)]
-fn main() {
 
+fn main() {
     let term = Surface::new();
 
-    let mut pty = ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
+    enable_console();
+
+    let mut pty =
+        ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
     pty.start_shell().unwrap();
 
-    pty.pipes.1.write(b"ping localhost");
-    pty.pipes.1.write(b"\r");
+    // pty.pipes.1.write(b"ping localhost");
+    // pty.pipes.1.write(b"\r");
 
-    let (tx, rx) = sync_channel(1);
-
+    let (tx, rx) = channel();
+    let mut readpipe = pty.pipes.0.clone();
     thread::spawn(move || {
         let mut buffer = vec![0; 1];
         loop {
             buffer.clear();
             buffer.resize(1, 0);
-            let readbytes = pty.pipes.0.read(&mut buffer).unwrap();
-            if readbytes > 0 {
-                tx.send(buffer.clone());
-            }
-
-            // let send_str = String::from_utf8(buffer.clone()).unwrap();
+            let readbytes = readpipe.read(&mut buffer).unwrap();
+            tx.send(buffer.clone());
         }
         println!("listen thread quit");
     });
 
+    thread::spawn(move || {
+        let mut stdin = stdin();
+        for c in stdin.lock().bytes() {
+            pty.pipes.1.write(&[c.unwrap()]);
+            pty.pipes.1.flush();
+        }
+    });
+
     let mut stdout = stdout();
+    stdout.lock().flush();
     loop {
         let j = rx.recv().unwrap();
-        stdout.flush();
-        stdout.write_all(&j);
+        stdout.lock().write_all(&j);
+        stdout.lock().flush();
     }
+   
+
+    // while let Ok(_) = stdin.read(&mut input) {
+    //   //  if (&input[0] == &b"\r"[0]) { continue; }
+    //     pty.pipes.1.write_all(&input);
+    //     pty.pipes.1.flush();
+
+    //     input.clear();
+    //     input.resize(1, 0);
+    // }
 }

@@ -51,6 +51,12 @@ impl Read for SyncPipeIn {
     }
 }
 
+impl Clone for SyncPipeIn {
+    fn clone(&self) -> SyncPipeIn {
+        SyncPipeIn { f_in: self.f_in.try_clone().unwrap() }
+    }
+}
+
 impl Write for SyncPipeOut {
     fn write(&mut self, buf: &[u8]) -> Result<usize>
     {

@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3.5", features = ["impl-default", "winuser", "synchapi", "roerrorapi", "winerror", "consoleapi", "namedpipeapi", "handleapi", "fileapi", "std"]}
+winapi = { version = "0.3.5", features = ["impl-default", "winuser", "synchapi", "roerrorapi", "winerror", "consoleapi", "namedpipeapi", "handleapi", "fileapi", "std", "wincon"]}
 widestring = "0.4"
 dunce = "0.1.1"
 lazy_static = "1.2.0"
@@ -18,4 +18,4 @@ bytes = "0.4"
 [patch.crates-io.winapi]
 git = "https://github.com/davidhewitt/winapi-rs.git"
 branch = "conpty"
-features = ["winuser", "synchapi", "roerrorapi", "winerror", "wincon", "namedpipeapi", "handleapi", "fileapi", "std"]
+features = ["winuser", "synchapi", "roerrorapi", "winerror", "wincon", "namedpipeapi", "handleapi", "fileapi", "std", "wincon"]
