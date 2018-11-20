@@ -2,15 +2,15 @@
 
 conmux is a Console multiplexer for Windows using the new Window 10 ConPTY APIs.
 
-• Written in Rust
-• Zoomable Panes
-• Tabs
-• tmux-like default bindings
+- Written in Rust
+- Zoomable Panes
+- Tabs
+- tmux-like default bindings
 
 While conmux supplies tmux-like functionality, much like ConPTY itself is not a Unix PTY, *conmux is not tmux*. There is no session support, and conmux does not use a compatible configuration file.
 
 Requirements
-• Windows 10 1809 or Higher
+- Windows 10 1809 or Higher
 
 ## Todo
 
