@@ -13,7 +13,6 @@ use winapi::um::processthreadsapi::{
     CreateProcessW, InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
     PROCESS_INFORMATION, STARTUPINFOW,
 };
-use winapi::um::wincon::ENABLE_VIRTUAL_TERMINAL_INPUT;
 
 use winapi::um::winbase::{EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW};
 use winapi::um::wincon::{COORD, HPCON};
@@ -23,6 +22,7 @@ use widestring::U16CString;
 
 use crate::pipes::*;
 use crate::surface::Coord;
+use crate::wincon::ConsoleEnabledToken;
 
 impl Into<COORD> for Coord {
     fn into(self) -> COORD {
@@ -50,6 +50,7 @@ impl ConPty {
         coord: impl Into<Coord>,
         shell: impl Into<String>,
         pwd: Option<&Path>,
+        _: ConsoleEnabledToken
     ) -> Result<ConPty> {
         let coord = coord.into();
         let (hpipe_in, ph_pipe_out) = create_sync_pipe().unwrap();

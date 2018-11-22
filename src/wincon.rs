@@ -6,8 +6,9 @@ use winapi::um::wincon::*;
 
 use std::io::{Error, Result};
 
+pub struct ConsoleEnabledToken;
 
-pub fn enable_console() -> Result<()> {
+pub fn enable_console() -> Result<ConsoleEnabledToken> {
     let console_out_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
     let console_in_handle =  unsafe { GetStdHandle(STD_INPUT_HANDLE) };
 
@@ -51,5 +52,5 @@ pub fn enable_console() -> Result<()> {
         return Err(Error::last_os_error());
     }
 
-    Ok(())
+    Ok(ConsoleEnabledToken)
 }

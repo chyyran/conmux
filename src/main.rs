@@ -30,10 +30,10 @@ use self::wincon::*;
 fn main() {
     let term = Surface::new();
 
-    enable_console().unwrap();
+    let token = enable_console().unwrap();
 
     let mut pty =
-        ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
+        ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\")), token).unwrap();
 
     pty.start_shell().unwrap();
 
@@ -66,6 +66,7 @@ fn main() {
     let mut buf = BytesMut::new();
 
     while let Some(Ok(c)) = lock.next() {
+        //todo: handle cursor sequences.
         let utf8_len = c.len_utf8();
         buf.resize(utf8_len, 0);
         c.encode_utf8(&mut buf[..]);
