@@ -5,12 +5,12 @@ use winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
 use winapi::um::wincon::*;
 
 use std::io::{Error, Result};
-
+use std::process::exit;
 pub struct ConsoleEnabledToken;
 
 pub fn enable_console() -> Result<ConsoleEnabledToken> {
     let console_out_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
-    let console_in_handle =  unsafe { GetStdHandle(STD_INPUT_HANDLE) };
+    let console_in_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) };
 
     let mut console_out_mode: DWORD = 0;
     let mut console_in_mode: DWORD = 0;
@@ -43,7 +43,8 @@ pub fn enable_console() -> Result<ConsoleEnabledToken> {
     let result = unsafe {
         SetConsoleMode(
             console_in_handle,
-            (console_in_mode & !ENABLE_ECHO_INPUT & !ENABLE_LINE_INPUT) | ENABLE_VIRTUAL_TERMINAL_INPUT
+            (console_in_mode & !ENABLE_ECHO_INPUT & !ENABLE_LINE_INPUT & !ENABLE_PROCESSED_INPUT)
+                | ENABLE_VIRTUAL_TERMINAL_INPUT,
         )
     };
 
@@ -53,4 +54,16 @@ pub fn enable_console() -> Result<ConsoleEnabledToken> {
     }
 
     Ok(ConsoleEnabledToken)
+
+    // match ctrlc::set_handler(move || {
+    //     print!("\x1b[?1049l");
+    //  //   exit(0);
+    // }) {
+    //     Ok(_) => {
+    //         print!("\x1b[?1049h");
+    //         Ok(ConsoleEnabledToken)
+    //     }
+    //     //todo actual error here.
+    //     Err(e) => Err(Error::last_os_error()),
+    // }
 }

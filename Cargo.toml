@@ -15,6 +15,7 @@ terminal_size = "0.1"
 crossbeam = "0.5"
 bytes = "0.4"
 unicode_reader = "0.1.1"
+ctrlc = { version = "3.0", features = ["termination"] }
 
 [patch.crates-io.winapi]
 git = "https://github.com/davidhewitt/winapi-rs.git"

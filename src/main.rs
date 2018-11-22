@@ -6,6 +6,7 @@ extern crate terminal_size;
 extern crate unicode_reader;
 extern crate widestring;
 extern crate winapi;
+extern crate ctrlc;
 
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
