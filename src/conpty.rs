@@ -5,7 +5,7 @@ use std::mem::size_of;
 use std::ptr::{null, null_mut};
 
 use winapi::shared::basetsd::{PSIZE_T, SIZE_T};
-use winapi::shared::minwindef::BYTE;
+use winapi::shared::minwindef::{BYTE, DWORD};
 use winapi::shared::ntdef::{LPCWSTR, LPWSTR};
 use winapi::shared::winerror::S_OK;
 use winapi::um::consoleapi;
@@ -13,6 +13,8 @@ use winapi::um::processthreadsapi::{
     CreateProcessW, InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
     PROCESS_INFORMATION, STARTUPINFOW,
 };
+use winapi::um::wincon::ENABLE_VIRTUAL_TERMINAL_INPUT;
+
 use winapi::um::winbase::{EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW};
 use winapi::um::wincon::{COORD, HPCON};
 
@@ -66,7 +68,6 @@ impl ConPty {
 
     #[must_use]
     pub fn start_shell(&self) -> Result<()> {
-
         // Most of this code was ripped from
         // https://github.com/davidhewitt/alacritty/blob/consoleapi/src/tty/windows/conpty.rs
         // Essentially this hooks up the shell and points it at the pseudo pty started by create_pseudo_console.
@@ -82,7 +83,9 @@ impl ConPty {
                 InitializeProcThreadAttributeList(null_mut(), 1, 0, &mut size as PSIZE_T) > 0;
 
             // This call was expected to return false.
-            if failure { return Err(Error::last_os_error()); } 
+            if failure {
+                return Err(Error::last_os_error());
+            }
         }
 
         let mut attr_list: Box<[BYTE]> = vec![0; size].into_boxed_slice();
@@ -97,7 +100,9 @@ impl ConPty {
                 &mut size as PSIZE_T,
             ) > 0;
 
-            if !success { return Err(Error::last_os_error()); } 
+            if !success {
+                return Err(Error::last_os_error());
+            }
         }
 
         // Set thread attribute list's Pseudo Console to the specified ConPTY
@@ -112,7 +117,9 @@ impl ConPty {
                 null_mut(),
             ) > 0;
 
-            if !success { return Err(Error::last_os_error()); } 
+            if !success {
+                return Err(Error::last_os_error());
+            }
         }
 
         let mut proc_info: PROCESS_INFORMATION = Default::default();
@@ -145,7 +152,7 @@ impl ConPty {
                 command as LPWSTR,
                 null_mut(),
                 null_mut(),
-                false as i32,
+                true as i32,
                 EXTENDED_STARTUPINFO_PRESENT,
                 null_mut(),
                 cwd_ptr,
@@ -153,7 +160,9 @@ impl ConPty {
                 &mut proc_info as *mut PROCESS_INFORMATION,
             ) > 0;
 
-            if !success { return Err(Error::last_os_error()); }
+            if !success {
+                return Err(Error::last_os_error());
+            }
         }
 
         Ok(())
@@ -173,7 +182,7 @@ impl ConPty {
                 &mut pty_handle as *mut HPCON,
             )
         };
-
+       
         if result != S_OK {
             Err(Error::last_os_error())
         } else {
@@ -183,9 +192,8 @@ impl ConPty {
 
     fn resize_pseudo_console(&mut self, coord: impl Into<Coord>) -> Result<()> {
         let coord = coord.into();
-        let result = unsafe {
-            consoleapi::ResizePseudoConsole(self.pty_handle.0, coord.clone().into())
-        };
+        let result =
+            unsafe { consoleapi::ResizePseudoConsole(self.pty_handle.0, coord.clone().into()) };
         if result != S_OK {
             Err(Error::last_os_error())
         } else {

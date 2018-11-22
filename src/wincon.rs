@@ -1,31 +1,55 @@
-use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
-use winapi::um::wincon::{ENABLE_VIRTUAL_TERMINAL_PROCESSING, DISABLE_NEWLINE_AUTO_RETURN};
-use winapi::um::processenv::GetStdHandle;
-use winapi::um::winbase::{STD_OUTPUT_HANDLE, STD_INPUT_HANDLE};
 use winapi::shared::minwindef::DWORD;
+use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
+use winapi::um::processenv::GetStdHandle;
+use winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+use winapi::um::wincon::*;
 
-use std::io::{Write, Read};
-
-use std::os::windows::io::FromRawHandle;
-use std::fs::File;
-
-pub fn enable_console() {
-
-    let console_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
-    let mut console_mode: DWORD = 0;
-    let _result = unsafe { GetConsoleMode(console_handle, &mut console_mode) };
-
-    console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
-    let _result = unsafe { SetConsoleMode(console_handle, console_mode) };
-}
-
-pub fn os_stdout() -> impl Write {
-    let console_handle = unsafe { winapi::um::processenv::GetStdHandle(STD_OUTPUT_HANDLE) };
-    unsafe { File::from_raw_handle(console_handle) } 
-}
+use std::io::{Error, Result};
 
 
-pub fn os_stdin() -> impl Read {
-    let console_handle = unsafe { winapi::um::processenv::GetStdHandle(STD_INPUT_HANDLE) };
-    unsafe { File::from_raw_handle(console_handle) } 
+pub fn enable_console() -> Result<()> {
+    let console_out_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+    let console_in_handle =  unsafe { GetStdHandle(STD_INPUT_HANDLE) };
+
+    let mut console_out_mode: DWORD = 0;
+    let mut console_in_mode: DWORD = 0;
+
+    let result = unsafe { GetConsoleMode(console_out_handle, &mut console_out_mode) };
+
+    if result == 0 {
+        eprintln!("get console mode error");
+        return Err(Error::last_os_error());
+    }
+
+    let result = unsafe {
+        SetConsoleMode(
+            console_out_handle,
+            console_out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN,
+        )
+    };
+    if result == 0 {
+        eprintln!("set console mode error when enable VT");
+        return Err(Error::last_os_error());
+    }
+
+    let result = unsafe { GetConsoleMode(console_in_handle, &mut console_in_mode) };
+
+    if result == 0 {
+        eprintln!("get console mode error for input");
+        return Err(Error::last_os_error());
+    }
+
+    let result = unsafe {
+        SetConsoleMode(
+            console_in_handle,
+            (console_in_mode & !ENABLE_ECHO_INPUT & !ENABLE_LINE_INPUT) | ENABLE_VIRTUAL_TERMINAL_INPUT
+        )
+    };
+
+    if result == 0 {
+        eprintln!("set console mode error for echo input disable");
+        return Err(Error::last_os_error());
+    }
+
+    Ok(())
 }

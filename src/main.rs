@@ -3,6 +3,7 @@ extern crate crossbeam;
 extern crate dunce;
 extern crate lazy_static;
 extern crate terminal_size;
+extern crate unicode_reader;
 extern crate widestring;
 extern crate winapi;
 
@@ -10,6 +11,9 @@ use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::thread;
+
+use bytes::BytesMut;
+use unicode_reader::CodePoints;
 
 mod conpty;
 mod pipes;
@@ -26,51 +30,46 @@ use self::wincon::*;
 fn main() {
     let term = Surface::new();
 
-    enable_console();
+    enable_console().unwrap();
 
     let mut pty =
         ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
-    pty.start_shell().unwrap();
 
-    // pty.pipes.1.write(b"ping localhost");
-    // pty.pipes.1.write(b"\r");
+    pty.start_shell().unwrap();
 
     let (tx, rx) = channel();
     let mut readpipe = pty.pipes.0.clone();
     thread::spawn(move || {
-        let mut buffer = vec![0; 1];
-        loop {
-            buffer.clear();
-            buffer.resize(1, 0);
-            let readbytes = readpipe.read(&mut buffer).unwrap();
-            tx.send(buffer.clone());
+        let mut lock = readpipe.bytes();
+        for c in lock {
+            if let Ok(c) = c {
+                tx.send(c);
+            }
         }
         println!("listen thread quit");
     });
 
     thread::spawn(move || {
-        let mut stdin = stdin();
-        for c in stdin.lock().bytes() {
-            pty.pipes.1.write(&[c.unwrap()]);
-            pty.pipes.1.flush();
+        let mut stdout = stdout();
+        let mut lock = stdout.lock();
+        lock.flush();
+        loop {
+            let j = rx.recv().unwrap();
+
+            lock.write(&[j]);
+            lock.flush();
         }
     });
 
-    let mut stdout = stdout();
-    stdout.lock().flush();
-    loop {
-        let j = rx.recv().unwrap();
-        stdout.lock().write_all(&j);
-        stdout.lock().flush();
+    let mut stdin = stdin();
+    let mut lock = CodePoints::from(stdin.lock().bytes());
+    let mut buf = BytesMut::new();
+
+    while let Some(Ok(c)) = lock.next() {
+        let utf8_len = c.len_utf8();
+        buf.resize(utf8_len, 0);
+        c.encode_utf8(&mut buf[..]);
+        pty.pipes.1.write(&buf);
+        pty.pipes.1.flush();
     }
-   
-
-    // while let Ok(_) = stdin.read(&mut input) {
-    //   //  if (&input[0] == &b"\r"[0]) { continue; }
-    //     pty.pipes.1.write_all(&input);
-    //     pty.pipes.1.flush();
-
-    //     input.clear();
-    //     input.resize(1, 0);
-    // }
 }
