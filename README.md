@@ -11,10 +11,8 @@ While conmux supplies tmux-like functionality, much like ConPTY itself is not a 
 
 Requirements
 - Windows 10 1809 or Higher
-
 ## Todo
-
-conmux is not currently functioning and essentially serves as a demonstration of the ConPTY API in Rust. Input hasn't even been implemented yet. 
+The goal so far is to support buffered multiplexing. An event loop has been implemented to handle multiple PTYs at once, but still only runs one PTY at a time.
 
 ## Usage
 

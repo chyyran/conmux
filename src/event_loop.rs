@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind, Result};
 
 use std::thread;
 
-use crossbeam::channel::{select, unbounded, bounded, Receiver};
+use crossbeam::channel::{bounded, select, unbounded, Receiver};
 
 pub struct Context<T>
 where
@@ -36,7 +36,6 @@ where
         self.consoles.push(BufferedPseudoConsole::new(console));
     }
 
-
     pub fn set_active_console(&mut self, idx: usize) -> Result<()> {
         if let Some(_) = self.consoles.get(idx) {
             self.active_console = idx;
@@ -49,11 +48,16 @@ where
         }
     }
 
+    pub fn delete_console(&mut self, idx: usize) {
+        self.consoles.remove(idx);
+        // handle idx 0
+        // handle active_console -1
+    }
     pub fn console(&self, i: usize) -> Option<&T> {
         self.consoles.get(i).and_then(|c| Some(c.as_ref()))
     }
 
-     pub fn console_mut(&mut self, i: usize) -> Option<&mut T> {
+    pub fn console_mut(&mut self, i: usize) -> Option<&mut T> {
         self.consoles.get_mut(i).and_then(|c| Some(c.as_mut()))
     }
 
@@ -77,6 +81,10 @@ pub fn listen_input(quit: Receiver<()>) -> Receiver<u8> {
                recv(quit) -> _ => break,
                default => {
                    if let Some(Ok(c)) = lock.next() {
+                       if c == b'\x02' {
+                           // todo: handle actions here. 
+                           break;
+                       }
                        tx.send(c).unwrap();
                    }
                }
@@ -99,8 +107,7 @@ where
             writer.flush().unwrap();
         } else {
             quit_tx.send(()).unwrap();
-            break
+            break;
         }
     }
-
 }
