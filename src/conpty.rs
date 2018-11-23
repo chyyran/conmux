@@ -1,11 +1,11 @@
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::path::{Path, PathBuf};
 
 use std::mem::size_of;
 use std::ptr::{null, null_mut};
 
 use winapi::shared::basetsd::{PSIZE_T, SIZE_T};
-use winapi::shared::minwindef::{BYTE, DWORD};
+use winapi::shared::minwindef::{BYTE};
 use winapi::shared::ntdef::{LPCWSTR, LPWSTR};
 use winapi::shared::winerror::S_OK;
 use winapi::um::consoleapi;
@@ -21,8 +21,8 @@ use dunce::canonicalize;
 use widestring::U16CString;
 
 use crate::pipes::*;
+use crate::pty::PseudoConsole;
 use crate::surface::Coord;
-use crate::wincon::ConsoleEnabledToken;
 
 impl Into<COORD> for Coord {
     fn into(self) -> COORD {
@@ -50,7 +50,6 @@ impl ConPty {
         coord: impl Into<Coord>,
         shell: impl Into<String>,
         pwd: Option<&Path>,
-        _: ConsoleEnabledToken
     ) -> Result<ConPty> {
         let coord = coord.into();
         let (hpipe_in, ph_pipe_out) = create_sync_pipe().unwrap();
@@ -183,7 +182,7 @@ impl ConPty {
                 &mut pty_handle as *mut HPCON,
             )
         };
-       
+
         if result != S_OK {
             Err(Error::last_os_error())
         } else {
@@ -201,6 +200,47 @@ impl ConPty {
             self.size = coord;
             Ok(())
         }
+    }
+}
+
+impl Read for ConPty {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        self.pipes.0.read(buf)
+    }
+}
+
+impl Write for ConPty {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        self.pipes.1.write(buf)
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        self.pipes.1.flush()
+    }
+}
+
+impl PseudoConsole<ConPty> for ConPty {
+    type Reader = SyncPipeIn;
+    type Writer = SyncPipeOut;
+    fn dimensions(&self) -> &Coord {
+        &self.size
+    }
+
+    fn resize(&mut self, coord: &Coord) -> Result<&Coord> {
+        self.resize_pseudo_console(coord)
+            .and_then(move |_| Ok(self.dimensions()))
+    }
+
+    fn start_shell(&self) -> Result<()> {
+        self.start_shell()
+    }
+
+    fn writer(&mut self) -> &mut Self::Writer {
+        &mut self.pipes.1
+    }
+
+    fn reader(&self) -> &Self::Reader {
+        &self.pipes.0
     }
 }
 
