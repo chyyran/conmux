@@ -302,8 +302,10 @@ impl PseudoConsole<ConPty> for ConPty {
 impl Drop for ConPty {
     // todo: check for pseudoconsole already closed.
     fn drop(&mut self) {
-        unsafe {
-            consoleapi::ClosePseudoConsole(self.pty_handle.0);
+        if !self.keep_alive().dead() {
+            unsafe {
+                consoleapi::ClosePseudoConsole(self.pty_handle.0);
+            }
         }
     }
 }
