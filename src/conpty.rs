@@ -1,18 +1,22 @@
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{empty, Bytes, Error, ErrorKind, Read, Result, Write};
 use std::path::{Path, PathBuf};
 
 use std::mem::size_of;
 use std::ptr::{null, null_mut};
 
 use winapi::shared::basetsd::{PSIZE_T, SIZE_T};
-use winapi::shared::minwindef::{BYTE};
-use winapi::shared::ntdef::{LPCWSTR, LPWSTR};
+use winapi::shared::minwindef::BYTE;
+use winapi::shared::ntdef::{HANDLE, LPCWSTR, LPWSTR};
 use winapi::shared::winerror::S_OK;
 use winapi::um::consoleapi;
 use winapi::um::processthreadsapi::{
     CreateProcessW, InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
     PROCESS_INFORMATION, STARTUPINFOW,
 };
+
+use winapi::shared::winerror::WAIT_TIMEOUT;
+use winapi::um::synchapi::WaitForSingleObject;
+use winapi::um::winbase::WAIT_OBJECT_0;
 
 use winapi::um::winbase::{EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW};
 use winapi::um::wincon::{COORD, HPCON};
@@ -21,7 +25,7 @@ use dunce::canonicalize;
 use widestring::U16CString;
 
 use crate::pipes::*;
-use crate::pty::PseudoConsole;
+use crate::pty::{KeepAlive, PseudoConsole};
 use crate::surface::Coord;
 
 impl Into<COORD> for Coord {
@@ -37,8 +41,18 @@ pub struct PtyHandle(HPCON);
 unsafe impl Send for PtyHandle {}
 unsafe impl Sync for PtyHandle {}
 
+pub struct ShellHandle(HANDLE);
+unsafe impl Send for ShellHandle {}
+unsafe impl Sync for ShellHandle {}
+impl Clone for ShellHandle {
+    fn clone(&self) -> Self {
+        ShellHandle(self.0)
+    }
+}
+
 pub struct ConPty {
     pty_handle: PtyHandle,
+    shell_handle: ShellHandle,
     size: Coord,
     shell: String,
     pwd: Option<PathBuf>,
@@ -58,6 +72,7 @@ impl ConPty {
             Err(err) => Err(err),
             Ok(pty_handle) => Ok(ConPty {
                 pty_handle: PtyHandle(pty_handle),
+                shell_handle: ShellHandle(0 as HANDLE),
                 shell: shell.into(),
                 size: coord,
                 pwd: pwd.map(|p| p.to_owned()),
@@ -67,7 +82,7 @@ impl ConPty {
     }
 
     #[must_use]
-    pub fn start_shell(&self) -> Result<()> {
+    pub fn start_shell(&mut self) -> Result<()> {
         // Most of this code was ripped from
         // https://github.com/davidhewitt/alacritty/blob/consoleapi/src/tty/windows/conpty.rs
         // Essentially this hooks up the shell and points it at the pseudo pty started by create_pseudo_console.
@@ -165,6 +180,7 @@ impl ConPty {
             }
         }
 
+        self.shell_handle = ShellHandle(proc_info.hProcess);
         Ok(())
     }
 
@@ -219,9 +235,42 @@ impl Write for ConPty {
     }
 }
 
+pub struct ConPtyKeepAlive {
+    shell_handle: ShellHandle,
+}
+
+impl KeepAlive for ConPtyKeepAlive {
+    fn dead(&self) -> bool {
+        if self.shell_handle.0 as usize == 0 {
+            return false;
+        }
+
+        unsafe {
+            match WaitForSingleObject(self.shell_handle.0, 0) {
+                // Process has exited
+                WAIT_OBJECT_0 => true,
+                // Reached timeout of 0, process has not exited
+                WAIT_TIMEOUT => false,
+                // Error checking process, winpty gave us a bad agent handle?
+                _ => true,
+            }
+        }
+    }
+}
+
+impl Clone for ConPtyKeepAlive {
+    fn clone(&self) -> ConPtyKeepAlive {
+        ConPtyKeepAlive {
+            shell_handle: self.shell_handle.clone(),
+        }
+    }
+}
+
 impl PseudoConsole<ConPty> for ConPty {
     type Reader = SyncPipeIn;
     type Writer = SyncPipeOut;
+    type KeepAlive = ConPtyKeepAlive;
+
     fn dimensions(&self) -> &Coord {
         &self.size
     }
@@ -231,7 +280,7 @@ impl PseudoConsole<ConPty> for ConPty {
             .and_then(move |_| Ok(self.dimensions()))
     }
 
-    fn start_shell(&self) -> Result<()> {
+    fn start_shell(&mut self) -> Result<()> {
         self.start_shell()
     }
 
@@ -241,6 +290,12 @@ impl PseudoConsole<ConPty> for ConPty {
 
     fn reader(&self) -> &Self::Reader {
         &self.pipes.0
+    }
+
+    fn keep_alive(&self) -> Self::KeepAlive {
+        ConPtyKeepAlive {
+            shell_handle: self.shell_handle.clone(),
+        }
     }
 }
 

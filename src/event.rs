@@ -7,6 +7,8 @@ use std::io::{stdin, Read, Write};
 use std::io::{Error, ErrorKind, Result};
 use std::marker::PhantomData;
 
+use std::sync::{Arc, Weak};
+use std::process::exit;
 use std::ops::FnOnce;
 use std::thread::{self as thread, JoinHandle};
 
@@ -14,9 +16,11 @@ use std::thread::{self as thread, JoinHandle};
 pub enum Action {
     KeyInputReceived(u8),
     MouseInputReceived(u8),
-    PtyActiveChange(u8),
+    PtyActiveChange(usize),
+    PtyExited(usize),
     ControlCode(char),
     PtyOutReceived(usize, u8),
+    PtyDead(usize),
     Startup,
     ModeChange,
 }
@@ -24,6 +28,7 @@ pub enum Action {
 pub struct Context<'a, T>
 where
     T: PseudoConsole<T>,
+    T: 'static,
 {
     consoles: Vec<BufferedPseudoConsole<T>>,
     active_console: usize,
@@ -33,6 +38,7 @@ where
 impl<'a, T> Context<'a, T>
 where
     T: PseudoConsole<T>,
+    T: 'static,
 {
     pub fn new(_: ConsoleEnabledToken) -> Context<'a, T> {
         Context {
@@ -42,9 +48,9 @@ where
         }
     }
 
-    fn add_console(&mut self, console: T) -> &BufferedPseudoConsole<T> {
+    fn add_console(&mut self, console: T) -> &mut BufferedPseudoConsole<T> {
         self.consoles.push(BufferedPseudoConsole::new(console));
-        self.consoles.last().unwrap()
+        self.consoles.last_mut().unwrap()
     }
 
     pub fn set_active_console(&mut self, idx: usize) -> Result<()> {
@@ -84,6 +90,7 @@ where
 pub struct EventContext<'a, T>
 where
     T: PseudoConsole<T>,
+    T: 'static,
 {
     receivers: Vec<Receiver<Action>>,
     handlers: Vec<Box<FnMut(&mut Context<T>, Action) + 'a>>,
@@ -114,11 +121,24 @@ where
 
     pub fn add_console(&mut self, console: T) {
         let console = self.context.add_console(console);
+        console.start_shell().unwrap();
         let reader = console.as_ref().reader().clone();
+        let ka = console.as_ref().keep_alive();
+
         self.sender(|tx| {
             let mut rx = reader.bytes();
             while let Some(Ok(c)) = rx.next() {
                 tx.send(Action::PtyOutReceived(0, c)).unwrap();
+            }
+            Ok(())
+        });
+
+        self.sender(move |tx| {
+            loop {
+                if ka.dead() {
+                    tx.send(Action::PtyDead(0)).unwrap();
+                    break;
+                }
             }
             Ok(())
         });
@@ -159,6 +179,7 @@ where
 
     pub fn start_event_loop(&mut self) {
         self.sender(|tx| Ok(tx.send(Action::Startup).unwrap()));
+
         loop {
             if let Some(action) = self.next() {
                 for f in self.handlers.iter_mut() {

@@ -8,9 +8,9 @@ extern crate unicode_reader;
 extern crate widestring;
 extern crate winapi;
 
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdout, Write};
 use std::path::PathBuf;
-use std::thread;
+use std::process::exit;
 
 mod conpty;
 mod context;
@@ -23,7 +23,6 @@ mod wincon;
 use self::conpty::*;
 use self::context::*;
 use self::event::*;
-use self::pty::*;
 use self::surface::Surface;
 use self::wincon::*;
 
@@ -34,12 +33,7 @@ fn main() {
     let term = Surface::new();
 
     let token = enable_console().unwrap();
-
     let mut ectx = EventContext::new(token);
-
-    // ectx.sender(||{
-
-    // })
 
     let mut pty =
         ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
@@ -48,7 +42,12 @@ fn main() {
     ectx.handler(|ctx, action| {
         if let Action::Startup = action {
             ctx.set_active_console(0);
-            ctx.active_console().start_shell();
+        }
+    });
+
+    ectx.handler(|ctx, action| {
+        if let Action::PtyDead(_) = action {
+            exit(0);
         }
     });
 
