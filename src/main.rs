@@ -13,17 +13,19 @@ use std::path::PathBuf;
 use std::thread;
 
 mod conpty;
-mod event_loop;
+mod context;
 mod pipes;
 mod pty;
 mod surface;
 mod wincon;
+mod event;
 
 use self::conpty::*;
-use self::event_loop::*;
+use self::context::*;
 use self::pty::*;
 use self::surface::Surface;
 use self::wincon::*;
+use self::event::*;
 
 #[allow(dead_code)]
 #[allow(unused)]
@@ -33,28 +35,37 @@ fn main() {
 
     let token = enable_console().unwrap();
 
-    let mut context = Context::new(token);
+    let mut ectx = EventContext::new(token);
 
+    // ectx.sender(||{
+        
+    // })
     let mut pty =
         ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
 
-    context.add_console(pty);
-    context.set_active_console(0);
-    context.active_console().start_shell();
+    ectx.context.add_console(pty);
+    ectx.context.set_active_console(0);
+    ectx.context.active_console().start_shell();
 
+    let rx = ectx.context.active_console().reader().clone();
+    ectx.sender(|tx| {
+        let mut rx = rx.bytes();
+        while let Some(Ok(c)) = rx.next() { 
+            tx.send(Action::PtyOutReceived(0, c));
+        }
+        Ok(())
+    });
 
-    let rx = context.active_console().reader().clone();
-    thread::spawn(move || {
+    ectx.handler(|ctx, action| {
         let mut stdout = stdout();
         let mut lock = stdout.lock();
-        let mut rx = rx.bytes();
-        lock.flush();
-
-        while let Some(Ok(c)) = rx.next() { 
-            lock.write(&[c]);
-            lock.flush();
+        if let Action::PtyOutReceived(_, c) = action {
+           lock.write(&[c]);
+           lock.flush();
         }
     });
 
-    run(&mut context);
+    listen_input(&mut ectx);
+    register_console_handler(&mut ectx);
+    ectx.start_event_loop();
 }
