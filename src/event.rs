@@ -17,6 +17,7 @@ pub enum Action {
     PtyActiveChange(u8),
     ControlCode(char),
     PtyOutReceived(usize, u8),
+    Startup,
     ModeChange,
 }
 
@@ -26,7 +27,7 @@ where
 {
     consoles: Vec<BufferedPseudoConsole<T>>,
     active_console: usize,
-    _pd: PhantomData<&'a T>
+    _pd: PhantomData<&'a T>,
 }
 
 impl<'a, T> Context<'a, T>
@@ -37,12 +38,13 @@ where
         Context {
             consoles: Vec::new(),
             active_console: 0,
-            _pd: PhantomData
+            _pd: PhantomData,
         }
     }
 
-    pub fn add_console(&mut self, console: T) {
+    fn add_console(&mut self, console: T) -> &BufferedPseudoConsole<T> {
         self.consoles.push(BufferedPseudoConsole::new(console));
+        self.consoles.last().unwrap()
     }
 
     pub fn set_active_console(&mut self, idx: usize) -> Result<()> {
@@ -79,11 +81,13 @@ where
     }
 }
 
-pub struct EventContext<'a, T> 
-where T: PseudoConsole<T>{
+pub struct EventContext<'a, T>
+where
+    T: PseudoConsole<T>,
+{
     receivers: Vec<Receiver<Action>>,
     handlers: Vec<Box<FnMut(&mut Context<T>, Action) + 'a>>,
-    pub context: Context<'a, T>
+    context: Context<'a, T>,
 }
 
 pub type QuitSignal = Sender<()>;
@@ -96,7 +100,7 @@ where
         EventContext {
             receivers: Vec::new(),
             handlers: Vec::new(),
-            context: Context::new(t)
+            context: Context::new(t),
         }
     }
 
@@ -106,6 +110,18 @@ where
         F: 'a,
     {
         self.handlers.push(Box::new(f));
+    }
+
+    pub fn add_console(&mut self, console: T) {
+        let console = self.context.add_console(console);
+        let reader = console.as_ref().reader().clone();
+        self.sender(|tx| {
+            let mut rx = reader.bytes();
+            while let Some(Ok(c)) = rx.next() {
+                tx.send(Action::PtyOutReceived(0, c)).unwrap();
+            }
+            Ok(())
+        });
     }
 
     pub fn sender<F>(&mut self, f: F) -> (JoinHandle<Result<()>>, QuitSignal)
@@ -121,7 +137,9 @@ where
     }
 
     fn next(&self) -> Option<Action> {
-        if self.receivers.len() == 0 { return None; }
+        if self.receivers.len() == 0 {
+            return None;
+        }
         let mut select = Select::new();
         let mut select_col = Vec::new();
         for recv in self.receivers.iter() {
@@ -133,13 +151,14 @@ where
         // binary search?
         for (i, r) in select_col {
             if i == index {
-               return oper.recv(r).ok();
+                return oper.recv(r).ok();
             }
         }
         None
     }
 
     pub fn start_event_loop(&mut self) {
+        self.sender(|tx| Ok(tx.send(Action::Startup).unwrap()));
         loop {
             if let Some(action) = self.next() {
                 for f in self.handlers.iter_mut() {

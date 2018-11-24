@@ -3,8 +3,8 @@ use std::convert::{AsMut, AsRef};
 use std::io::{Read, Result, Write};
 
 pub trait PseudoConsole<T>: Send + Sync {
-    type Reader: Read + Send + Sync + Clone;
-    type Writer: Write + Send + Sync;
+    type Reader: Read + Send + Sync + Clone + 'static;
+    type Writer: Write + Send + Sync + 'static;
     fn dimensions(&self) -> &Coord;
     fn resize(&mut self, coord: &Coord) -> Result<&Coord>;
     fn start_shell(&self) -> Result<()>;

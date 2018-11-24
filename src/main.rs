@@ -14,18 +14,18 @@ use std::thread;
 
 mod conpty;
 mod context;
+mod event;
 mod pipes;
 mod pty;
 mod surface;
 mod wincon;
-mod event;
 
 use self::conpty::*;
 use self::context::*;
+use self::event::*;
 use self::pty::*;
 use self::surface::Surface;
 use self::wincon::*;
-use self::event::*;
 
 #[allow(dead_code)]
 #[allow(unused)]
@@ -38,30 +38,26 @@ fn main() {
     let mut ectx = EventContext::new(token);
 
     // ectx.sender(||{
-        
+
     // })
+
     let mut pty =
         ConPty::new(&term.dimensions, "powershell", Some(&PathBuf::from("C:\\"))).unwrap();
+    ectx.add_console(pty);
 
-    ectx.context.add_console(pty);
-    ectx.context.set_active_console(0);
-    ectx.context.active_console().start_shell();
-
-    let rx = ectx.context.active_console().reader().clone();
-    ectx.sender(|tx| {
-        let mut rx = rx.bytes();
-        while let Some(Ok(c)) = rx.next() { 
-            tx.send(Action::PtyOutReceived(0, c));
+    ectx.handler(|ctx, action| {
+        if let Action::Startup = action {
+            ctx.set_active_console(0);
+            ctx.active_console().start_shell();
         }
-        Ok(())
     });
 
     ectx.handler(|ctx, action| {
         let mut stdout = stdout();
         let mut lock = stdout.lock();
         if let Action::PtyOutReceived(_, c) = action {
-           lock.write(&[c]);
-           lock.flush();
+            lock.write(&[c]);
+            lock.flush();
         }
     });
 
