@@ -30,5 +30,6 @@ where
             writer.write(&[key]).unwrap();
             writer.flush().unwrap();
         }
+        None
     })
 }

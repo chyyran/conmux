@@ -17,8 +17,6 @@ pub struct SyncPipeIn {
 }
 
 
-
-
 pub struct SyncPipeOut {
     f_out: File,
 }

@@ -11,11 +11,11 @@ widestring = "0.4"
 dunce = "0.1.1"
 lazy_static = "1.2.0"
 terminal_size = "0.1"
-
 crossbeam = "0.5"
 bytes = "0.4"
 unicode_reader = "0.1.1"
 ctrlc = { version = "3.0", features = ["termination"] }
+vte = "0.3"
 
 [patch.crates-io.winapi]
 git = "https://github.com/davidhewitt/winapi-rs.git"

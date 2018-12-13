@@ -1,5 +1,6 @@
 use crate::pty::*;
 use crate::wincon::ConsoleEnabledToken;
+use crate::surface::Coord;
 
 use crossbeam::channel::*;
 
@@ -16,11 +17,11 @@ use std::thread::{self as thread, JoinHandle};
 pub enum Action {
     KeyInputReceived(u8),
     MouseInputReceived(u8),
-    PtyActiveChange(usize),
-    PtyExited(usize),
     ControlCode(char),
+    PtyActiveChange(usize),
     PtyOutReceived(usize, u8),
     PtyDead(usize),
+    PtyResize(usize, Coord),
     Startup,
     ModeChange,
 }
@@ -93,7 +94,7 @@ where
     T: 'static,
 {
     receivers: Vec<Receiver<Action>>,
-    handlers: Vec<Box<FnMut(&mut Context<T>, Action) + 'a>>,
+    handlers: Vec<Box<FnMut(&mut Context<T>, Action) -> Option<()> + 'a>>,
     context: Context<'a, T>,
 }
 
@@ -113,7 +114,7 @@ where
 
     pub fn handler<F>(&mut self, f: F)
     where
-        F: FnMut(&mut Context<T>, Action),
+        F: FnMut(&mut Context<T>, Action) -> Option<()>,
         F: 'a,
     {
         self.handlers.push(Box::new(f));
@@ -141,6 +142,13 @@ where
                 }
             }
             Ok(())
+        });
+
+        self.handler(|ctx, action| {
+            if let Action::PtyResize(0, c) = action {
+                ctx.console_mut(0)?.resize(&c).unwrap();
+            }
+            None
         });
     }
 
@@ -183,7 +191,7 @@ where
         loop {
             if let Some(action) = self.next() {
                 for f in self.handlers.iter_mut() {
-                    f(&mut self.context, action)
+                    f(&mut self.context, action);
                 }
             }
         }
