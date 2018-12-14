@@ -15,23 +15,40 @@ use std::ops::FnOnce;
 use std::thread::{self as thread, JoinHandle};
 
 #[derive(Debug, Copy, Clone)]
-pub struct PtyIndex(usize);
+pub struct PtyIndex(pub usize);
 #[derive(Debug, Copy, Clone)]
-pub struct Line(usize);
+pub struct Line(pub usize);
 #[derive(Debug, Copy, Clone)]
-pub struct Column(usize);
+pub struct Column(pub usize);
 
 #[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
     KeyInputReceived(u8),
     HostInput(char),
+    HostControlInput(u8),
+    HostDeleteKey,
+    HostInsertBlank(Column),
+    HostPutTabs(i64),
+    HostBackspace,
+    HostCarriageReturn,
+    HostLineFeed,
+    HostNewline,
+    HostInsertBlankLines(Line),
+    HostDeleteLines(Line),
+    HostEraseCharacters(Column),
+    HostDeleteCharacters(Column),
+    HostClearLine(LineClearMode),
+    HostClearScreen(ClearMode),
+    HostClearTabs(TabulationClearMode),
+    HostSubtitute,
+    
     HostMouseInputReceived(u8),
     HostCursorGoto(Line, Column),
     HostCursorMoveUp(Line),
     HostCursorMoveDown(Line),
     HostCursorMoveForward(Column),
-    HostCursorMoveBackwards(Column),
+    HostCursorMoveBackward(Column),
     HostCursorMoveForwardTabs(Column),
     HostCursorMoveBackwardsTabs(Column),
     HostCursorMoveUpAndCarriageReturn(Column),
@@ -78,7 +95,7 @@ pub enum Action {
     PtyCursorMoveUp(PtyIndex, Line),
     PtyCursorMoveDown(PtyIndex, Line),
     PtyCursorMoveForward(PtyIndex, Column),
-    PtyCursorMoveBackwards(PtyIndex, Column),
+    PtyCursorMoveBackward(PtyIndex, Column),
     PtyCursorMoveForwardTabs(PtyIndex, Column),
     PtyCursorMoveBackwardsTabs(PtyIndex, Column),
     PtyCursorMoveUpAndCarriageReturn(PtyIndex, Column),
