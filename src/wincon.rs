@@ -51,7 +51,7 @@ pub fn enable_console() -> Result<ConsoleEnabledToken> {
         eprintln!("set console mode error for echo input disable");
         return Err(Error::last_os_error());
     }
-    println!("\x1b[?1049h");
+    print!("\x1b[?1049h");
     Ok(ConsoleEnabledToken)
 }
 

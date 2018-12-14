@@ -22,6 +22,7 @@ mod pipes;
 mod pty;
 mod surface;
 mod wincon;
+mod ansitypes;
 
 use self::conpty::*;
 use self::context::*;
@@ -87,14 +88,15 @@ fn main() {
         None
     });
 
-    ectx.handler(|ctx, action| {
-        let mut file = OpenOptions::new().append(true).create(true).truncate(false).open("foo.txt").unwrap();
-        if let Action::PtyOutReceived(_, c) = action {
-            file.write(&[c]);
-            file.flush();
-        }
-        None
-    }); 
+    // ectx.handler(|ctx, action| {
+    //     let mut file = OpenOptions::new().append(true).create(true).truncate(false).open("foo.txt").unwrap();
+    //     if let Action::PtyOutReceived(_, c) = action {
+    //         file.write(&[c]);
+    //         file.flush();
+    //     }
+    //     None
+    // }); 
+
     listen_input(&mut ectx);
     register_console_handler(&mut ectx);
     ectx.start_event_loop();
